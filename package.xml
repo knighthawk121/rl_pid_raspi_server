@@ -4,7 +4,7 @@
   <name>rl_pid_server</name>
   <version>0.0.1</version>
   <description>ROS2 PID tuning action server for motor control</description>
-  <maintainer email="user@todo.todo">user</maintainer>
+  <maintainer email="arvindh.r@outlook.com">Arvindh Ramesh</maintainer>
   <license>Apache License 2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
@@ -12,7 +12,7 @@
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>action_msgs</depend>
-  <depend>rl_pid_uros</depend>  <!-- Your custom action interface package -->
+  <depend>rl_pid_uros</depend>  
   
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

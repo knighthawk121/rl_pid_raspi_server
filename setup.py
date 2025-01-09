@@ -13,14 +13,24 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
+<<<<<<< HEAD
     maintainer='user',
     maintainer_email='user@todo.todo',
+=======
+    maintainer='Arvindh Ramesh',
+    maintainer_email='arvindh.r@outlook.com',
+>>>>>>> 7dd7840 (first commit)
     description='ROS2 PID tuning action server for motor control',
     license='Apache License 2.0',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'pid_server = rl_pid_server.pid_server_node:main',
+<<<<<<< HEAD
+=======
+            'pid_tester = rl_pid_server.pid_test:main',
+            'motor_tester = rl_pid_server.motor_test:main'
+>>>>>>> 7dd7840 (first commit)
         ],
     },
 )
