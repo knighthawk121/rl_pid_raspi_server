@@ -287,17 +287,15 @@ class PIDActionServer(Node):
     def cleanup(self):
         self.motor.cleanup()
 
-def main(args=None):
-    try:
-        rclpy.init(args=args)
-    except rclpy.exceptions.ROSInterruptException:
-        return
-    except Exception as e:
-        print(f"ROS initialization error: {e}")
-        return
-
         
-    rclpy.init(args=args)
+def main(args=None):
+    # Guard to prevent multiple initializations
+    if not rclpy.ok():
+        try:
+            rclpy.init(args=args)
+        except RuntimeError as e:
+            print(f"Error initializing ROS 2: {e}")
+            return 1
     
     try:
         # Create and initialize the action server
@@ -310,15 +308,27 @@ def main(args=None):
         try:
             executor.spin()
         except KeyboardInterrupt:
+            print("Received keyboard interrupt, shutting down...")
+        finally:
+            # Clean up GPIO first
             GPIO.cleanup()
-            
-    finally:
-        # Cleanup
-        if 'action_server' in locals():
+            # Then clean up ROS 2 resources
+            executor.shutdown()
+            action_server.cleanup()
             action_server.destroy_node()
-        rclpy.shutdown()
-        GPIO.cleanup()
-
+            
+    except Exception as e:
+        print(f"Error during execution: {e}")
+        return 1
+    finally:
+        try:
+            if rclpy.ok():
+                rclpy.shutdown()
+        except Exception as e:
+            print(f"Error during shutdown: {e}")
+            return 1
+    
+    return 0
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
