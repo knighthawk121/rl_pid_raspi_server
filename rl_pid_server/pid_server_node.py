@@ -42,13 +42,13 @@ class NetworkConfig:
 
 class MotorControl:
     def __init__(self):
-        # GPIO pins for motor control
-        self.ENC_A = 23  # Change these pins according to your setup
-        self.ENC_B = 24
-        self.PWM = 18
-        self.IN1 = 20
-        self.IN2 = 21
-        self.STBY = 16
+        # Pin Definitions
+        ENC_A = 16  # Encoder A
+        ENC_B = 18  # Encoder B
+        PWM = 12   # PWM Pin
+        IN2 = 13   # Motor Input 2
+        IN1 = 11   # Motor Input 1
+        STBY = 15  # Standby Pin
 
         # PID parameters
         self.position = 0
@@ -275,6 +275,7 @@ def main(args=None):
         action_server.cleanup()
         action_server.destroy_node()
         rclpy.shutdown()
+        GPIO.cleanup()
 
 if __name__ == '__main__':
     main()
