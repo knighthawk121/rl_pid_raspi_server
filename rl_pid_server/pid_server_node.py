@@ -288,6 +288,15 @@ class PIDActionServer(Node):
         self.motor.cleanup()
 
 def main(args=None):
+    try:
+        rclpy.init(args=args)
+    except rclpy.exceptions.ROSInterruptException:
+        return
+    except Exception as e:
+        print(f"ROS initialization error: {e}")
+        return
+
+        
     rclpy.init(args=args)
     
     try:
