@@ -198,7 +198,7 @@ class PIDActionServer(Node):
             
 
             current_pos = self.motor.get_position()
-            error = self.motor.target - current_pos
+            error = current_pos - self.motor.target 
 
             # PID calculations
             dedt = (error - self.motor.eprev) / (delta_t + self.motor.EPSILON)
