@@ -264,7 +264,7 @@ class PIDActionServer(Node):
                     # Update feedback
                     feedback_msg.current_error = float(error)
                     feedback_msg.current_position = int(current_pos)
-                    feedback_msg.target_position = float(self.motor.target)
+                    feedback_msg.target_position = int(self.motor.target)
                     goal_handle.publish_feedback(feedback_msg)
 
                     if abs(error) < self.motor.DEADBAND:
