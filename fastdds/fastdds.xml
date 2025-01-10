@@ -3,6 +3,13 @@
     <profiles>
         <participant profile_name="default_profile" is_default_profile="true">
             <rtps>
+                <!-- Memory and messaging configuration -->
+                <allocation>
+                    <initial_reserved_messages>50</initial_reserved_messages>
+                    <max_reserved_messages>100</max_reserved_messages>
+                </allocation>
+
+                <!-- Discovery configuration -->
                 <builtin>
                     <discovery_config>
                         <initialAnnouncements>
@@ -16,21 +23,50 @@
                             <sec>1</sec>
                             <nanosec>856000000</nanosec>
                         </leaseAnnouncement>
+                        <leaseDuration>
+                            <sec>20</sec>
+                            <nanosec>0</nanosec>
+                        </leaseDuration>
                     </discovery_config>
+
+                    <!-- Enhanced resource limits -->
                     <resourceLimitsQos>
                         <domainParticipant>
                             <allocation>
-                                <remote_participants>20</remote_participants>
-                                <remote_endpoints>20</remote_endpoints>
+                                <remote_participants>30</remote_participants>
+                                <remote_endpoints>30</remote_endpoints>
+                                <max_partitions>20</max_partitions>
+                                <max_user_data>256</max_user_data>
+                                <max_properties>50</max_properties>
                             </allocation>
                         </domainParticipant>
-                    </resourceLimitsQos>  
+                    </resourceLimitsQos>
+
+                    <!-- Memory management settings -->
+                    <memorySettings>
+                        <preallocated_endpoints>30</preallocated_endpoints>
+                        <dynamic_reserve_endpoints>30</dynamic_reserve_endpoints>
+                    </memorySettings>
                 </builtin>
+
+                <!-- Network ports configuration -->
                 <portParams>
                     <port>7400</port>
                     <domainIDGain>200</domainIDGain>
                     <participantIDGain>2</participantIDGain>
+                    <offsetd0>0</offsetd0>
+                    <offsetd1>10</offsetd1>
+                    <offsetd2>1</offsetd2>
+                    <offsetd3>11</offsetd3>
                 </portParams>
+
+                <!-- Transport configuration -->
+                <userTransports>
+                    <transport_id>TransportId1</transport_id>
+                    <type>UDPv4</type>
+                    <maxMessageSize>65500</maxMessageSize>
+                    <non_blocking_send>true</non_blocking_send>
+                </userTransports>
             </rtps>
         </participant>
     </profiles>
