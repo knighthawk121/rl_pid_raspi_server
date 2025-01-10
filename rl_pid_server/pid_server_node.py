@@ -169,15 +169,8 @@ class PIDActionServer(Node):
 
          
         # Create timer for motor control loop
+        self.last_control_update = self.get_clock().now()
         self.create_timer(0.02, self.motor_control_callback)  # 50Hz control loop    
-
-
-        # Initialize asyncio event loop
-        self.loop = asyncio.get_event_loop()
-        if not self.loop.is_running():
-            self.loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self.loop)
-            
 
         self.get_logger().info('PID Action Server has been started')
         self.get_logger().info(f'Listening on {self.ip_address}')
@@ -193,15 +186,16 @@ class PIDActionServer(Node):
 
         with self.motor.pid_lock:
             # Get current time and position
-            curr_time = time.time()
-            delta_t = curr_time - self.motor.prev_time
+            curr_time = self.get_clock().now()
+            dedelta_t = (curr_time - self.last_control_update).nanoseconds / 1e9
+            self.last_control_update = curr_time
             
             if delta_t <= 0:
                 self.get_logger().error('Invalid time delta')
                 return None, None
                 
             delta_t = max(delta_t, self.motor.MIN_DELTA_T)
-            self.motor.prev_time = curr_time
+            
 
             current_pos = self.motor.get_position()
             error = self.motor.target - current_pos
@@ -233,7 +227,7 @@ class PIDActionServer(Node):
 
             return float(error), int(current_pos)
 
-    async def execute_callback(self, goal_handle):
+    def execute_callback(self, goal_handle):
         self.get_logger().info('Executing goal...')
         
         feedback_msg = TunePID.Feedback()
@@ -250,7 +244,9 @@ class PIDActionServer(Node):
                 self.motor.eintegral = 0
                 self.motor.goal_active = True
 
+            rate = self.create_rate(10)  
             stable_count = 0
+
             while rclpy.ok():
                 if goal_handle.is_cancel_requested:
                     goal_handle.canceled()
@@ -274,7 +270,7 @@ class PIDActionServer(Node):
                     else:
                         stable_count = 0
 
-                await asyncio.sleep(0.1)  # 10Hz feedback rate
+                rate.sleep()  
 
             self.motor.goal_active = False
             result.final_error = float(error)
@@ -303,28 +299,18 @@ def main(args=None):
         executor = MultiThreadedExecutor()
         executor.add_node(action_server)
 
-        # Run the executor in a separate thread
-        import threading
-        executor_thread = threading.Thread(target=executor.spin, daemon=True)
-        executor_thread.start()
-
-        # Run the asyncio event loop in the main thread
-        loop = asyncio.get_event_loop()
-        if not loop.is_running():
-            loop.run_forever()
+        try:
+            executor.spin()
+        except KeyboardInterrupt:
+            GPIO.cleanup()
             
-    except KeyboardInterrupt:
-        GPIO.cleanup()
     finally:
         # Cleanup
         if 'action_server' in locals():
             action_server.destroy_node()
         rclpy.shutdown()
-        
-        # Stop the event loop
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.stop()
+        GPIO.cleanup()
+
 
 if __name__ == '__main__':
     main()
