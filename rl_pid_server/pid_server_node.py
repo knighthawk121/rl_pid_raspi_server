@@ -187,7 +187,7 @@ class PIDActionServer(Node):
         with self.motor.pid_lock:
             # Get current time and position
             curr_time = self.get_clock().now()
-            dedelta_t = (curr_time - self.last_control_update).nanoseconds / 1e9
+            delta_t = (curr_time - self.last_control_update).nanoseconds / 1e9
             self.last_control_update = curr_time
             
             if delta_t <= 0:
