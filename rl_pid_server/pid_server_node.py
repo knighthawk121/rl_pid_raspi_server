@@ -164,7 +164,6 @@ class PIDActionServer(Node):
             'tune_pid_action',
             self.execute_callback,
             callback_group=self.callback_group
-            #QoSProfile=qos_profile
         )
 
          
