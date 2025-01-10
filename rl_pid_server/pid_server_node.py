@@ -13,6 +13,9 @@ import math
 import socket
 import netifaces as ni
 import asyncio
+GPIO.cleanup()
+GPIO.setwarnings(False)
+
 
 class NetworkConfig:
     @staticmethod
@@ -74,22 +77,72 @@ class MotorControl:
         self.setup_gpio()
 
     def setup_gpio(self):
+        # Clean up any existing configurations
+        GPIO.cleanup()
+        GPIO.setwarnings(False)
+        
+        # Set mode and setup pins
         GPIO.setmode(GPIO.BOARD)
+        
+        # Setup encoder pins with pull-up resistors
         GPIO.setup(self.ENCA, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(self.ENCB, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        
+        # Setup motor control pins
         GPIO.setup(self.PWM, GPIO.OUT)
         GPIO.setup(self.IN1, GPIO.OUT)
         GPIO.setup(self.IN2, GPIO.OUT)
         GPIO.setup(self.STBY, GPIO.OUT)
         
+        # Initialize all outputs to LOW
+        GPIO.output(self.IN1, GPIO.LOW)
+        GPIO.output(self.IN2, GPIO.LOW)
+        GPIO.output(self.STBY, GPIO.LOW)
+        
         # Setup PWM
         self.pwm = GPIO.PWM(self.PWM, 1000)  # 1000 Hz frequency
         self.pwm.start(0)
         
-        # Setup encoder interrupt
-        GPIO.remove_event_detect(self.ENCA)
+        # Add a small delay before setting up the interrupt
         time.sleep(0.1)
-        GPIO.add_event_detect(self.ENCA, GPIO.RISING, callback=self.read_encoder, bouncetime=50)
+        
+        try:
+            GPIO.remove_event_detect(self.ENCA)
+        except:
+            pass  # Ignore if no event was set
+            
+        time.sleep(0.1)  # Add another small delay
+        
+        # Setup encoder interrupt with error handling
+        try:
+            GPIO.add_event_detect(self.ENCA, GPIO.RISING, 
+                                callback=self.read_encoder, 
+                                bouncetime=50)
+        except RuntimeError as e:
+            print(f"Error setting up encoder interrupt: {e}")
+            # You might want to raise this error or handle it differently
+            raise
+
+    def check_gpio_status(self):
+        """Add this method to MotorControl class for diagnostics"""
+        try:
+            # Check if GPIO mode is set
+            current_mode = GPIO.getmode()
+            print(f"Current GPIO mode: {current_mode}")
+            
+            # Check pin functions
+            pins = [self.ENCA, self.ENCB, self.PWM, self.IN1, self.IN2, self.STBY]
+            for pin in pins:
+                function = GPIO.gpio_function(pin)
+                print(f"Pin {pin} function: {function}")
+                
+            # Check if events are registered
+            print(f"Events on ENCA: {GPIO.event_detected(self.ENCA)}")
+            
+            return True
+        except Exception as e:
+            print(f"GPIO diagnostic error: {e}")
+            return False
 
     def read_encoder(self, channel):
         with self.position_lock:
@@ -158,6 +211,8 @@ class PIDActionServer(Node):
             self.get_logger().warning('Network connection lost!')
         
     def motor_control_callback(self):
+        
+        self.motor.check_gpio_status()
         if not self.motor.goal_active:
             return
 
