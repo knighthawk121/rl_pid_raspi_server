@@ -17,6 +17,14 @@
                             <nanosec>856000000</nanosec>
                         </leaseAnnouncement>
                     </discovery_config>
+                    <resourceLimitsQos>
+                        <domainParticipant>
+                            <allocation>
+                                <remote_participants>20</remote_participants>
+                                <remote_endpoints>20</remote_endpoints>
+                            </allocation>
+                        </domainParticipant>
+                    </resourceLimitsQos>  
                 </builtin>
                 <portParams>
                     <port>7400</port>
