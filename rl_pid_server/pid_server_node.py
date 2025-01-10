@@ -43,12 +43,12 @@ class NetworkConfig:
 class MotorControl:
     def __init__(self):
         # Pin Definitions
-        ENC_A = 16  # Encoder A
-        ENC_B = 18  # Encoder B
-        PWM = 12   # PWM Pin
-        IN2 = 13   # Motor Input 2
-        IN1 = 11   # Motor Input 1
-        STBY = 15  # Standby Pin
+        self.ENC_A = 16  # Encoder A
+        self.ENC_B = 18  # Encoder B
+        self.PWM = 12   # PWM Pin
+        self.IN2 = 13   # Motor Input 2
+        self.IN1 = 11   # Motor Input 1
+        self.STBY = 15  # Standby Pin
 
         # PID parameters
         self.position = 0
