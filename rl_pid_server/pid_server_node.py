@@ -43,8 +43,8 @@ class NetworkConfig:
 class MotorControl:
     def __init__(self):
         # Pin Definitions
-        self.ENC_A = 16  # Encoder A
-        self.ENC_B = 18  # Encoder B
+        self.ENCA = 16  # Encoder A
+        self.ENCB = 18  # Encoder B
         self.PWM = 12   # PWM Pin
         self.IN2 = 13   # Motor Input 2
         self.IN1 = 11   # Motor Input 1
@@ -75,8 +75,8 @@ class MotorControl:
 
     def setup_gpio(self):
         GPIO.setmode(GPIO.BOARD)
-        GPIO.setup(self.ENC_A, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.setup(self.ENC_B, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setup(self.ENCA, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setup(self.ENCB, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(self.PWM, GPIO.OUT)
         GPIO.setup(self.IN1, GPIO.OUT)
         GPIO.setup(self.IN2, GPIO.OUT)
@@ -87,11 +87,13 @@ class MotorControl:
         self.pwm.start(0)
         
         # Setup encoder interrupt
-        GPIO.add_event_detect(self.ENC_A, GPIO.RISING, callback=self.read_encoder)
+        GPIO.remove_event_detect(self.ENCA)
+        time.sleep(0.1)
+        GPIO.add_event_detect(self.ENCA, GPIO.RISING, callback=self.read_encoder, bouncetime=50)
 
     def read_encoder(self, channel):
         with self.position_lock:
-            b = GPIO.input(self.ENC_B)
+            b = GPIO.input(self.ENCB)
             self.position = self.position + 1 if b > 0 else self.position - 1
 
     def get_position(self):
@@ -270,7 +272,7 @@ def main(args=None):
     try:
         executor.spin()
     except KeyboardInterrupt:
-        pass
+        GPIO.cleanup()
     finally:
         action_server.cleanup()
         action_server.destroy_node()
