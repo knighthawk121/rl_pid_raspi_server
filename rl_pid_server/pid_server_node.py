@@ -65,7 +65,7 @@ class MotorControl:
         self.EPSILON = 1.0e-6
         self.DEADBAND = 5
         self.MAX_INTEGRAL = 100.0
-        self.MAX_PWM_VALUE = 255
+        self.MAX_PWM_VALUE = 100.0
         
         self.position_lock = Lock()
         self.pid_lock = Lock()
@@ -79,6 +79,10 @@ class MotorControl:
 
     def setup_gpio(self):
         # No cleanup needed at start, we'll handle it at shutdown
+        try:
+            GPIO.cleanup()
+        except:
+            pass
         GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BOARD)
         
@@ -153,15 +157,7 @@ class PIDActionServer(Node):
         
         self.motor = MotorControl()
         self.callback_group = ReentrantCallbackGroup()
-        
-        # Create the action server with QoS profile for reliable communication
-        qos_profile = rclpy.qos.QoSProfile(
-            reliability=rclpy.qos.ReliabilityPolicy.RELIABLE,
-            durability=rclpy.qos.DurabilityPolicy.TRANSIENT_LOCAL,
-            history=rclpy.qos.HistoryPolicy.KEEP_LAST,
-            depth=1
-        )
-        
+            
         self._action_server = ActionServer(
             self,
             TunePID,
@@ -170,15 +166,21 @@ class PIDActionServer(Node):
             callback_group=self.callback_group
             #QoSProfile=qos_profile
         )
+
+         
+        # Create timer for motor control loop
+        self.create_timer(0.02, self.motor_control_callback)  # 50Hz control loop    
+
+
+        # Initialize asyncio event loop
+        self.loop = asyncio.get_event_loop()
+        if not self.loop.is_running():
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
             
+
         self.get_logger().info('PID Action Server has been started')
         self.get_logger().info(f'Listening on {self.ip_address}')
-
-        # Create timer for motor control loop
-        self.create_timer(0.02, self.motor_control_callback)  # 50Hz control loop
-        
-        # Create timer for network monitoring
-        self.create_timer(5.0, self.check_network_status)  # Check every 5 seconds
 
     def check_network_status(self):
         if not self.network_config.check_network_connection():
@@ -187,7 +189,7 @@ class PIDActionServer(Node):
     def motor_control_callback(self):
         
         if not self.motor.goal_active:
-            return
+            return None, None
 
         with self.motor.pid_lock:
             # Get current time and position
@@ -196,7 +198,7 @@ class PIDActionServer(Node):
             
             if delta_t <= 0:
                 self.get_logger().error('Invalid time delta')
-                return
+                return None, None
                 
             delta_t = max(delta_t, self.motor.MIN_DELTA_T)
             self.motor.prev_time = curr_time
@@ -229,56 +231,63 @@ class PIDActionServer(Node):
             self.motor.set_motor(direction, power)
             self.motor.eprev = error
 
-            return error, current_pos
+            return float(error), int(current_pos)
 
     async def execute_callback(self, goal_handle):
         self.get_logger().info('Executing goal...')
         
         feedback_msg = TunePID.Feedback()
         result = TunePID.Result()
+      
+        try:
+            # Update PID parameters
+            with self.motor.pid_lock:
+                self.motor.kp = float(goal_handle.request.kp)
+                self.motor.ki = float(goal_handle.request.ki)
+                self.motor.kd = float(goal_handle.request.kd)
+                self.motor.target = int(goal_handle.request.target_position)
+                self.motor.eprev = 0
+                self.motor.eintegral = 0
+                self.motor.goal_active = True
 
-        # Update PID parameters
-        with self.motor.pid_lock:
-            self.motor.kp = goal_handle.request.kp
-            self.motor.ki = goal_handle.request.ki
-            self.motor.kd = goal_handle.request.kd
-            self.motor.target = goal_handle.request.target_position
-            self.motor.eprev = 0
-            self.motor.eintegral = 0
-            self.motor.goal_active = True
+            stable_count = 0
+            while rclpy.ok():
+                if goal_handle.is_cancel_requested:
+                    goal_handle.canceled()
+                    self.motor.goal_active = False
+                    result.final_error = float(feedback_msg.current_error)
+                    return result
 
-        stable_count = 0
-        
-        while rclpy.ok():
-            if goal_handle.is_cancel_requested:
-                goal_handle.canceled()
-                self.motor.goal_active = False
-                result.final_error = feedback_msg.current_error
-                return result
+                error, current_pos = self.motor_control_callback()
+                
+                if error is not None and current_pos is not None:
+                    # Update feedback
+                    feedback_msg.current_error = float(error)
+                    feedback_msg.current_position = int(current_pos)
+                    feedback_msg.target_position = float(self.motor.target)
+                    goal_handle.publish_feedback(feedback_msg)
 
-            error, current_pos = self.motor_control_callback()
+                    if abs(error) < self.motor.DEADBAND:
+                        stable_count += 1
+                        if stable_count >= 5:
+                            break
+                    else:
+                        stable_count = 0
+
+                await asyncio.sleep(0.1)  # 10Hz feedback rate
+
+            self.motor.goal_active = False
+            result.final_error = float(error)
+            goal_handle.succeed()
             
-            # Update feedback
-            feedback_msg.current_error = error
-            feedback_msg.current_position = current_pos
-            feedback_msg.target_position = self.motor.target
-            goal_handle.publish_feedback(feedback_msg)
-
-            # Check for goal completion
-            if abs(error) < self.motor.DEADBAND:
-                stable_count += 1
-                if stable_count >= 5:
-                    break
-            else:
-                stable_count = 0
-
-            await asyncio.sleep(0.1)  # 10Hz feedback rate
-
-        self.motor.goal_active = False
-        result.final_error = error
-        goal_handle.succeed()
+            return result
         
-        return result
+        except Exception as e:
+            self.get_logger().error(f'Error in execute callback: {str(e)}')
+            self.motor.goal_active = False
+            goal_handle.abort()
+            result.final_error = 0.0
+            return result 
 
     def cleanup(self):
         self.motor.cleanup()
@@ -286,26 +295,36 @@ class PIDActionServer(Node):
 def main(args=None):
     rclpy.init(args=args)
     
-    # FastDDS-specific parameters
-    params = [
-        ('dds.initial_peers', ['127.0.0.1:7400']),
-        ('dds.default_domain_id', 0),
-    ]
-    
-    action_server = PIDActionServer()
-    
-    executor = MultiThreadedExecutor()
-    executor.add_node(action_server)
-    
     try:
-        executor.spin()
+        # Create and initialize the action server
+        action_server = PIDActionServer()
+        
+        # Create executor
+        executor = MultiThreadedExecutor()
+        executor.add_node(action_server)
+
+        # Run the executor in a separate thread
+        import threading
+        executor_thread = threading.Thread(target=executor.spin, daemon=True)
+        executor_thread.start()
+
+        # Run the asyncio event loop in the main thread
+        loop = asyncio.get_event_loop()
+        if not loop.is_running():
+            loop.run_forever()
+            
     except KeyboardInterrupt:
         GPIO.cleanup()
     finally:
-        action_server.cleanup()
-        action_server.destroy_node()
+        # Cleanup
+        if 'action_server' in locals():
+            action_server.destroy_node()
         rclpy.shutdown()
-        GPIO.cleanup()
+        
+        # Stop the event loop
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.stop()
 
 if __name__ == '__main__':
     main()
