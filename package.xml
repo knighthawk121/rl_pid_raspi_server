@@ -4,7 +4,7 @@
   <name>rl_pid_server</name>
   <version>0.0.1</version>
   <description>ROS2 PID tuning action server for motor control</description>
-  <maintainer email="arvindh.r@outlook.com">Arvindh Ramesh</maintainer>
+  <maintainer email="arvindh.r@outlook.com">Arvindh_Ramesh</maintainer>
   <license>Apache License 2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>

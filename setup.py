@@ -13,11 +13,7 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-<<<<<<< HEAD
-    maintainer='user',
-    maintainer_email='user@todo.todo',
-=======
-    maintainer='Arvindh Ramesh',
+    maintainer='Arvindh_Ramesh',
     maintainer_email='arvindh.r@outlook.com',
 >>>>>>> 7dd7840 (first commit)
     description='ROS2 PID tuning action server for motor control',
