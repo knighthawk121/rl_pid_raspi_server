@@ -13,9 +13,6 @@ import math
 import socket
 import netifaces as ni
 import asyncio
-GPIO.cleanup()
-GPIO.setwarnings(False)
-
 
 class NetworkConfig:
     @staticmethod
@@ -42,7 +39,6 @@ class NetworkConfig:
             return True
         except OSError:
             return False
-
 class MotorControl:
     def __init__(self):
         # Pin Definitions
@@ -74,17 +70,19 @@ class MotorControl:
         self.position_lock = Lock()
         self.pid_lock = Lock()
         
+        # Initialize encoder state
+        self.prev_state = 0
+        self.encoder_running = False
+        
         self.setup_gpio()
+        self.start_encoder_polling()
 
     def setup_gpio(self):
-        # Clean up any existing configurations
-        GPIO.cleanup()
+        # No cleanup needed at start, we'll handle it at shutdown
         GPIO.setwarnings(False)
-        
-        # Set mode and setup pins
         GPIO.setmode(GPIO.BOARD)
         
-        # Setup encoder pins with pull-up resistors
+        # Setup encoder pins
         GPIO.setup(self.ENCA, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(self.ENCB, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         
@@ -94,61 +92,42 @@ class MotorControl:
         GPIO.setup(self.IN2, GPIO.OUT)
         GPIO.setup(self.STBY, GPIO.OUT)
         
-        # Initialize all outputs to LOW
+        # Initialize outputs
         GPIO.output(self.IN1, GPIO.LOW)
         GPIO.output(self.IN2, GPIO.LOW)
         GPIO.output(self.STBY, GPIO.LOW)
         
         # Setup PWM
-        self.pwm = GPIO.PWM(self.PWM, 1000)  # 1000 Hz frequency
+        self.pwm = GPIO.PWM(self.PWM, 1000)
         self.pwm.start(0)
-        
-        # Add a small delay before setting up the interrupt
-        time.sleep(0.1)
-        
-        try:
-            GPIO.remove_event_detect(self.ENCA)
-        except:
-            pass  # Ignore if no event was set
-            
-        time.sleep(0.1)  # Add another small delay
-        
-        # Setup encoder interrupt with error handling
-        try:
-            GPIO.add_event_detect(self.ENCA, GPIO.RISING, 
-                                callback=self.read_encoder, 
-                                bouncetime=50)
-        except RuntimeError as e:
-            print(f"Error setting up encoder interrupt: {e}")
-            # You might want to raise this error or handle it differently
-            raise
 
-    def check_gpio_status(self):
-        """Add this method to MotorControl class for diagnostics"""
-        try:
-            # Check if GPIO mode is set
-            current_mode = GPIO.getmode()
-            print(f"Current GPIO mode: {current_mode}")
-            
-            # Check pin functions
-            pins = [self.ENCA, self.ENCB, self.PWM, self.IN1, self.IN2, self.STBY]
-            for pin in pins:
-                function = GPIO.gpio_function(pin)
-                print(f"Pin {pin} function: {function}")
-                
-            # Check if events are registered
-            print(f"Events on ENCA: {GPIO.event_detected(self.ENCA)}")
-            
-            return True
-        except Exception as e:
-            print(f"GPIO diagnostic error: {e}")
-            return False
+    def poll_encoder(self):
+        """Polling function to run in separate thread"""
+        while self.encoder_running:
+            current_state = GPIO.input(self.ENCA)
+            if current_state != self.prev_state and current_state == 1:
+                b = GPIO.input(self.ENCB)
+                with self.position_lock:
+                    self.position = self.position + 1 if b > 0 else self.position - 1
+            self.prev_state = current_state
+            time.sleep(0.0001)  # 10kHz polling rate
 
-    def read_encoder(self, channel):
-        with self.position_lock:
-            b = GPIO.input(self.ENCB)
-            self.position = self.position + 1 if b > 0 else self.position - 1
+    def start_encoder_polling(self):
+        """Start the encoder polling thread"""
+        self.encoder_running = True
+        import threading
+        self.encoder_thread = threading.Thread(target=self.poll_encoder, daemon=True)
+        self.encoder_thread.start()
 
+    def cleanup(self):
+        """Clean up GPIO and stop polling"""
+        self.encoder_running = False
+        if hasattr(self, 'encoder_thread'):
+            self.encoder_thread.join(timeout=1.0)
+        self.pwm.stop()
+        GPIO.cleanup()
+
+    # Rest of the methods remain the same
     def get_position(self):
         with self.position_lock:
             return self.position
@@ -158,11 +137,6 @@ class MotorControl:
         self.pwm.ChangeDutyCycle(pwm_value)
         GPIO.output(self.IN1, GPIO.HIGH if direction == 1 else GPIO.LOW)
         GPIO.output(self.IN2, GPIO.LOW if direction == 1 else GPIO.HIGH)
-
-    def cleanup(self):
-        self.pwm.stop()
-        GPIO.cleanup()
-
 
 class PIDActionServer(Node):
     def __init__(self):
@@ -193,8 +167,8 @@ class PIDActionServer(Node):
             TunePID,
             'tune_pid_action',
             self.execute_callback,
-            callback_group=self.callback_group,
-            qos_profile=qos_profile
+            callback_group=self.callback_group
+            #QoSProfile=qos_profile
         )
             
         self.get_logger().info('PID Action Server has been started')
@@ -212,7 +186,6 @@ class PIDActionServer(Node):
         
     def motor_control_callback(self):
         
-        self.motor.check_gpio_status()
         if not self.motor.goal_active:
             return
 
