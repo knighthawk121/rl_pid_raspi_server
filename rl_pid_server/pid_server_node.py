@@ -227,6 +227,7 @@ class PIDActionServer(Node):
             return float(error), int(current_pos)
 
     def execute_callback(self, goal_handle):
+        self.get_logger().info(f'received a new goal request of values kp: {goal_handle.request.kp}, ki:{goal_handle.request.ki}, kd:{goal_handle.request.kd} and Tgt_pos:{goal_handle.request.target_position}')
         self.get_logger().info('Executing goal...')
         
         feedback_msg = TunePID.Feedback()
