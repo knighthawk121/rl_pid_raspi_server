@@ -275,7 +275,7 @@ class PIDActionServer(Node):
             self.motor.goal_active = False
             result.final_error = float(error)
             goal_handle.succeed()
-            
+            self.get_logger().info(f'goal completed with the final error :{error}')
             return result
         
         except Exception as e:
