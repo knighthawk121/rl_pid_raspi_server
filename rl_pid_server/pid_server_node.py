@@ -295,6 +295,9 @@ class PIDActionServer(Node):
                 self.motor.stable_time = 0
                 self.motor.stall_count = 0
 
+            rate = self.create_rate(10)  # 10 Hz feedback rate
+            max_iterations = 100  # 10 seconds maximum
+            iteration_count = 0
 
             while rclpy.ok() and iteration_count < max_iterations:
                 if goal_handle.is_cancel_requested:
