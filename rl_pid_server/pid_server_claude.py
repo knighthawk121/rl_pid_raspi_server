@@ -184,7 +184,7 @@ class MotorControl:
         target_pos = target_pos % 360
         
         # Calculate direct error
-        error = target_pos - current_pos
+        error = current_pos - target_pos
         
         # Adjust for shortest path
         if error > 180:
