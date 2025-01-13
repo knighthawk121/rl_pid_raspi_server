@@ -168,6 +168,29 @@ class MotorControl:
                     (time.time() - self.stable_time) >= self.STABLE_TIME_THRESHOLD)
                     
         return is_stalled, is_stable, self.velocity
+    def normalize_angle(self, angle):
+        """Normalize angle to -180 to +180 range"""
+        angle = angle % 360
+        if angle > 180:
+            angle -= 360
+        return angle
+
+    def calculate_shortest_path_error(self, current_pos, target_pos):
+        """Calculate shortest path error accounting for circular motion"""
+        # Normalize both positions to 0-360 range
+        current_pos = current_pos % 360
+        target_pos = target_pos % 360
+        
+        # Calculate direct error
+        error = target_pos - current_pos
+        
+        # Adjust for shortest path
+        if error > 180:
+            error -= 360
+        elif error < -180:
+            error += 360
+            
+        return error
 
     def cleanup(self):
         """Clean up GPIO and stop polling"""
