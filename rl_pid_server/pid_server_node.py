@@ -74,6 +74,18 @@ class MotorControl:
         self.prev_state = 0
         self.encoder_running = False
         
+        #new status monitoring parameters
+        self.velocity = 0.0
+        self.last_position = 0
+        self.last_velocity_time = time.time()
+        self.stable_time = 0.0
+        self.stall_count = 0
+        self.MAX_STALL_COUNT = 10  # Number of consecutive low-velocity readings to detect stall
+        self.VELOCITY_THRESHOLD = 1.0  # Threshold for stall detection
+        self.STABLE_TIME_THRESHOLD = 0.5  # Time error must be stable for completion
+        self.ERROR_STABILITY_THRESHOLD = 2.0  # Error range considered stable
+
+
         self.setup_gpio()
         self.start_encoder_polling()
 
@@ -123,6 +135,40 @@ class MotorControl:
         self.encoder_thread = threading.Thread(target=self.poll_encoder, daemon=True)
         self.encoder_thread.start()
 
+    def update_velocity(self):
+        current_time = time.time()
+        delta_t = current_time - self.last_velocity_time
+        if delta_t > 0:
+            with self.position_lock:
+                current_pos = self.position
+                self.velocity = (current_pos - self.last_position) / delta_t
+                self.last_position = current_pos
+                self.last_velocity_time = current_time
+    
+    def check_motor_status(self, error):
+        # Update velocity
+        self.update_velocity()
+        
+        # Check for stall condition
+        if abs(self.velocity) < self.VELOCITY_THRESHOLD:
+            self.stall_count += 1
+        else:
+            self.stall_count = 0
+            
+        is_stalled = self.stall_count >= self.MAX_STALL_COUNT
+        
+        # Check for stable error
+        if abs(error) < self.ERROR_STABILITY_THRESHOLD:
+            if self.stable_time == 0:
+                self.stable_time = time.time()
+        else:
+            self.stable_time = 0
+            
+        is_stable = (self.stable_time > 0 and 
+                    (time.time() - self.stable_time) >= self.STABLE_TIME_THRESHOLD)
+                    
+        return is_stalled, is_stable, self.velocity
+
     def cleanup(self):
         """Clean up GPIO and stop polling"""
         self.encoder_running = False
@@ -166,7 +212,7 @@ class PIDActionServer(Node):
             callback_group=self.callback_group
         )
 
-         
+        self.feedback_msg = TunePID.Feedback()
         # Create timer for motor control loop
         self.last_control_update = self.get_clock().now()
         self.create_timer(0.02, self.motor_control_callback)  # 50Hz control loop    
@@ -223,11 +269,14 @@ class PIDActionServer(Node):
             # Update motor
             self.motor.set_motor(direction, power)
             self.motor.eprev = error
+            is_stalled, is_stable, velocity = self.motor.check_motor_status(error)
 
-            return float(error), int(current_pos)
+            return float(error), int(current_pos), is_stalled, is_stable, velocity
 
     def execute_callback(self, goal_handle):
-        self.get_logger().info(f'received a new goal request of values kp: {goal_handle.request.kp}, ki:{goal_handle.request.ki}, kd:{goal_handle.request.kd} and Tgt_pos:{goal_handle.request.target_position}')
+        self.get_logger().info(f'Received new goal request - kp: {goal_handle.request.kp}, '
+                              f'ki: {goal_handle.request.ki}, kd: {goal_handle.request.kd}, '
+                              f'target: {goal_handle.request.target_position}')
         self.get_logger().info('Executing goal...')
         
         feedback_msg = TunePID.Feedback()
@@ -243,48 +292,56 @@ class PIDActionServer(Node):
                 self.motor.eprev = 0
                 self.motor.eintegral = 0
                 self.motor.goal_active = True
+                self.motor.stable_time = 0
+                self.motor.stall_count = 0
 
-            rate = self.create_rate(10)  
-            stable_count = 0
 
-            while rclpy.ok():
+            while rclpy.ok() and iteration_count < max_iterations:
                 if goal_handle.is_cancel_requested:
                     goal_handle.canceled()
                     self.motor.goal_active = False
                     result.final_error = float(feedback_msg.current_error)
                     return result
 
-                error, current_pos = self.motor_control_callback()
+                error, current_pos, is_stalled, is_stable, velocity = self.motor_control_callback()
                 
                 if error is not None and current_pos is not None:
                     # Update feedback
                     feedback_msg.current_error = float(error)
                     feedback_msg.current_position = int(current_pos)
                     feedback_msg.target_position = int(self.motor.target)
+                    feedback_msg.motor_stopped = is_stalled
+                    feedback_msg.error_stable = is_stable
+                    feedback_msg.velocity = float(velocity)
                     goal_handle.publish_feedback(feedback_msg)
 
-                    if abs(error) < self.motor.DEADBAND:
-                        stable_count += 1
-                        if stable_count >= 5:
-                            break
-                    else:
-                        stable_count = 0
+                    # Check completion conditions
+                    if is_stable:
+                        self.get_logger().info('Goal completed - Error stabilized')
+                        break
+                    elif is_stalled and not is_stable:
+                        self.get_logger().warn('Goal completed - Motor stalled')
+                        break
+                        
+                iteration_count += 1
+                if iteration_count >= max_iterations:
+                    self.get_logger().warn('Goal completed - Maximum time exceeded')
 
-                rate.sleep()  
+                rate.sleep()
 
             self.motor.goal_active = False
             result.final_error = float(error)
             goal_handle.succeed()
-            self.get_logger().info(f'goal completed with the final error :{error}')
+            self.get_logger().info(f'Goal completed with final error: {error}')
             return result
-        
+            
         except Exception as e:
             self.get_logger().error(f'Error in execute callback: {str(e)}')
             self.motor.goal_active = False
             goal_handle.abort()
             result.final_error = 0.0
-            return result 
-
+            return result
+        
     def cleanup(self):
         self.motor.cleanup()
 
