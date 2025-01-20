@@ -2,9 +2,6 @@
 <dds xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
     <profiles>
         <participant profile_name="default_profile" is_default_profile="true">
-            <!-- Previous participant configuration remains the same -->
-            
-            <!-- Add data reader profile -->
             <data_reader profile_name="default_reader" is_default_profile="true">
                 <historyMemoryPolicy>PREALLOCATED_WITH_REALLOC</historyMemoryPolicy>
                 <qos>
@@ -16,14 +13,77 @@
                         <max_samples>100</max_samples>
                         <max_instances>10</max_instances>
                         <max_samples_per_instance>10</max_samples_per_instance>
-                        <!-- Set a larger payload size -->
                         <allocated_samples>100</allocated_samples>
                     </resource_limits>
+                    <!-- Explicitly set payload size -->
+                    <payloadMaxSize>1024</payloadMaxSize>
                 </qos>
             </data_reader>
-            
             <rtps>
-                <!-- Your existing RTPS configuration -->
+                <!-- Memory and messaging configuration -->
+                <allocation>
+                    <initial_reserved_messages>50</initial_reserved_messages>
+                    <max_reserved_messages>100</max_reserved_messages>
+                </allocation>
+
+                <!-- Discovery configuration -->
+                <builtin>
+                    <discovery_config>
+                        <initialAnnouncements>
+                            <count>5</count>
+                            <period>
+                                <sec>0</sec>
+                                <nanosec>100000000</nanosec>
+                            </period>
+                        </initialAnnouncements>
+                        <leaseAnnouncement>
+                            <sec>1</sec>
+                            <nanosec>856000000</nanosec>
+                        </leaseAnnouncement>
+                        <leaseDuration>
+                            <sec>20</sec>
+                            <nanosec>0</nanosec>
+                        </leaseDuration>
+                    </discovery_config>
+
+                    <!-- Enhanced resource limits -->
+                    <resourceLimitsQos>
+                        <domainParticipant>
+                            <allocation>
+                                <remote_participants>30</remote_participants>
+                                <remote_endpoints>30</remote_endpoints>
+                                <max_partitions>20</max_partitions>
+                                <max_user_data>256</max_user_data>
+                                <max_properties>50</max_properties>
+                            </allocation>
+                        </domainParticipant>
+                    </resourceLimitsQos>
+
+                    <!-- Memory management settings -->
+                    <memorySettings>
+                        <preallocated_endpoints>30</preallocated_endpoints>
+                        <dynamic_reserve_endpoints>30</dynamic_reserve_endpoints>
+                    </memorySettings>
+                </builtin>
+
+                <!-- Network ports configuration -->
+                <portParams>
+                    <port>7400</port>
+                    <domainIDGain>200</domainIDGain>
+                    <participantIDGain>2</participantIDGain>
+                    <offsetd0>0</offsetd0>
+                    <offsetd1>10</offsetd1>
+                    <offsetd2>1</offsetd2>
+                    <offsetd3>11</offsetd3>
+                </portParams>
+
+                <!-- Transport configuration -->
+                <userTransports>
+                    <transport_id>TransportId1</transport_id>
+                    <type>UDPv4</type>
+                    <maxMessageSize>65500</maxMessageSize>
+                    <non_blocking_send>true</non_blocking_send>
+                </userTransports>
             </rtps>
         </participant>
     </profiles>
