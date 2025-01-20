@@ -76,13 +76,13 @@ class MotorControlLauncher:
             self.print_header()
             self.print_menu()
             
-            print("\nOptions:")
+            #print("\nOptions:")
             print("6. Quit")
             
             choice = input("\nEnter your choice(1-6): ").lower()
             
             if choice == '6':
-                print("\nExiting Motor Control Test Suite...")
+                print("\nExiting Server control suite...")
                 break
                 
             if choice not in self.scripts:
