@@ -14,6 +14,7 @@ import socket
 import netifaces as ni
 import asyncio
 import sys
+import os
 
 class NetworkConfig:
     @staticmethod
@@ -125,7 +126,8 @@ class MotorControl:
             if current_state != self.prev_state and current_state == 1:
                 b = GPIO.input(self.ENCB)
                 with self.position_lock:
-                    self.position = self.position + 1 if b > 0 else self.position - 1
+                    raw_position = self.position + 1 if b > 0 else self.position - 1
+                    self.position = raw_position % 360  # Normalize to 0-360
             self.prev_state = current_state
             time.sleep(0.0001)  # 10kHz polling rate
 
@@ -169,6 +171,29 @@ class MotorControl:
                     (time.time() - self.stable_time) >= self.STABLE_TIME_THRESHOLD)
                     
         return is_stalled, is_stable, self.velocity
+    def normalize_angle(self, angle):
+        """Normalize angle to -180 to +180 range"""
+        angle = angle % 360
+        if angle > 180:
+            angle -= 360
+        return angle
+
+    def calculate_shortest_path_error(self, current_pos, target_pos):
+        """Calculate shortest path error accounting for circular motion"""
+        # Normalize both positions to 0-360 range
+        current_pos = current_pos % 360
+        target_pos = target_pos % 360
+        
+        # Calculate direct error
+        error = current_pos - target_pos
+        
+        # Adjust for shortest path
+        if error > 180:
+            error -= 360
+        elif error < -180:
+            error += 360
+            
+        return error
 
     def cleanup(self):
         """Clean up GPIO and stop polling"""
@@ -201,7 +226,8 @@ class PIDActionServer(Node):
         
         if not self.network_config.check_network_connection():
             self.get_logger().warning('No network connection detected!')
-        
+            
+        os.environ["FASTRTPS_DEFAULT_PROFILES_FILE"] = "/etc/fastrtps/fastdds_pid_server.xml"
         self.motor = MotorControl()
         self.callback_group = ReentrantCallbackGroup()
             
@@ -226,12 +252,10 @@ class PIDActionServer(Node):
             self.get_logger().warning('Network connection lost!')
         
     def motor_control_callback(self):
-        
         if not self.motor.goal_active:
             return None, None
 
         with self.motor.pid_lock:
-            # Get current time and position
             curr_time = self.get_clock().now()
             delta_t = (curr_time - self.last_control_update).nanoseconds / 1e9
             self.last_control_update = curr_time
@@ -242,21 +266,25 @@ class PIDActionServer(Node):
                 
             delta_t = max(delta_t, self.motor.MIN_DELTA_T)
             
-
+            # Get current position and calculate error using shortest path
             current_pos = self.motor.get_position()
-            error = current_pos - self.motor.target 
+            error = self.motor.calculate_shortest_path_error(current_pos, self.motor.target)
 
-            # PID calculations
+            # PID calculations with normalized error
             dedt = (error - self.motor.eprev) / (delta_t + self.motor.EPSILON)
             self.motor.eintegral += error * delta_t
             self.motor.eintegral = max(min(self.motor.eintegral, 
-                                         self.motor.MAX_INTEGRAL), 
-                                     -self.motor.MAX_INTEGRAL)
+                                        self.motor.MAX_INTEGRAL), 
+                                    -self.motor.MAX_INTEGRAL)
 
             # Calculate control signal
             pid_output = ((self.motor.kp * error) + 
-                         (self.motor.ki * self.motor.eintegral) + 
-                         (self.motor.kd * dedt))
+                        (self.motor.ki * self.motor.eintegral) + 
+                        (self.motor.kd * dedt))
+
+            # Add velocity limiting
+            MAX_OUTPUT = 50  # Adjust this value based on your system
+            pid_output = max(min(pid_output, MAX_OUTPUT), -MAX_OUTPUT)
 
             # Convert to motor commands
             power = min(abs(pid_output), self.motor.MAX_PWM_VALUE)
@@ -273,7 +301,7 @@ class PIDActionServer(Node):
             is_stalled, is_stable, velocity = self.motor.check_motor_status(error)
 
             return float(error), int(current_pos), is_stalled, is_stable, velocity
-
+   
     def execute_callback(self, goal_handle):
         self.get_logger().info(f'Received new goal request - kp: {goal_handle.request.kp}, '
                               f'ki: {goal_handle.request.ki}, kd: {goal_handle.request.kd}, '
