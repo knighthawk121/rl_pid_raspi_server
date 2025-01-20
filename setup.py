@@ -22,8 +22,7 @@ setup(
     entry_points={
         'console_scripts': [
             'pid_server = rl_pid_server.pid_server_node:main',
-            'pid_tester = rl_pid_server.pid_test:main',
-            'motor_tester = rl_pid_server.motor_test:main'
+            'rl_pid_server = rl_pid_server.rl_pid_server:main'
         ],
     },
 )
