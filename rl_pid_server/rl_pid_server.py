@@ -77,7 +77,7 @@ class MotorControlLauncher:
             self.print_menu()
             
             #print("\nOptions:")
-            print("6. Quit")
+            print("\n6. Quit")
             
             choice = input("\nEnter your choice(1-6): ").lower()
             
