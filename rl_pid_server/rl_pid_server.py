@@ -9,7 +9,7 @@ class MotorControlLauncher:
         self.scripts = {
             "1": {
                 "name": "RL PID SERVER",
-                "file": "pid_server_claude.py",
+                "file": "pid_server_node.py",
                 "description": "Control and tune a motor PID control using ROS2 client"
             },
 

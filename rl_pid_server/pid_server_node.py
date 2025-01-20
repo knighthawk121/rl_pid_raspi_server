@@ -14,7 +14,7 @@ import socket
 import netifaces as ni
 import asyncio
 import sys
-import os
+#import os
 
 class NetworkConfig:
     @staticmethod
@@ -227,7 +227,7 @@ class PIDActionServer(Node):
         if not self.network_config.check_network_connection():
             self.get_logger().warning('No network connection detected!')
             
-        os.environ["FASTRTPS_DEFAULT_PROFILES_FILE"] = "/etc/fastrtps/fastdds_pid_server.xml"
+        #os.environ["FASTRTPS_DEFAULT_PROFILES_FILE"] = "/etc/fastrtps/fastdds_pid_server.xml"
         self.motor = MotorControl()
         self.callback_group = ReentrantCallbackGroup()
             
