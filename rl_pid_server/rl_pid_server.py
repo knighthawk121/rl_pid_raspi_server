@@ -46,7 +46,7 @@ class MotorControlLauncher:
         print("Server Node for RL based ROS2 PID tuner client ")
         print("="*50)
         print("\nAvailable Scripts:")
-        print("\nUse the PID and MOTOR testing scripts for testing the hardware before running the server node")
+        print("\n(Use the PID and MOTOR testing scripts for testing the hardware before running the server node)")
         print("-"*20)
 
     def print_menu(self):
