@@ -135,6 +135,8 @@ float64 velocity      # Current motor velocity
 
 The client node can use this action to send PID gain values and target positions to the server, and receive feedback on the motor's performance.
 
+## Other Potential use cases
+This method can be easily implemented on a more complex systems that use PID Controller as a primary control system, such as quadrotor UAVs. 
 
 ## Contributing
 
